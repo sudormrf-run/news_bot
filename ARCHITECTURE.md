@@ -120,6 +120,18 @@ news_bot/
   - `SYSTEM_PROMPT`: 기본 역할 및 규칙
   - `DEVELOPER_PROMPT`: 출력 형식 지정
 
+#### summarizers/compact.py
+- **역할**: 전체 요약을 간결한 버전으로 재요약
+- **주요 기능**:
+  - Full content를 입력으로 받아 재처리
+  - GitHub Discussion URL 포함
+  - 플랫폼별 스타일 지원 (discord, twitter, slack)
+  - 글자수 제한 준수 (Discord 2000자, Twitter 280자)
+  - 핵심 뉴스 3-5개 선별
+- **사용 시점**:
+  - GitHub Discussions 발송 후
+  - 간결한 버전이 필요한 플랫폼 발송 전
+
 #### summarizers/postprocessors/base.py
 - **역할**: PostProcessor 인터페이스 정의
 - **주요 클래스**:
@@ -221,7 +233,7 @@ news_bot/
   - `--debug`: 디버그 모드
   - `--dry-run`: 실제 발송 없이 시뮬레이션
 
-## 데이터 흐름
+## 데이터 흐름 (2단계 워크플로우)
 
 ```mermaid
 graph LR
@@ -229,18 +241,47 @@ graph LR
     B --> C{Source Detection}
     C --> D[SmolAINews]
     C --> E[Future Sources]
-    D --> F[Markdown Content]
+    D --> F[Full Content]
     E --> F
-    F --> G[Save to File]
-    F --> H{Publishers}
-    H --> I[Discord]
-    H --> J[GitHub]
-    H --> K[Kakao]
+    F --> G[Save Full Version]
+    F --> H[GitHub Discussions]
+    H --> I[GitHub URL]
     
-    L[Error] --> M[Logger]
-    M --> N[File Log]
-    M --> O[Discord Alert]
+    F --> J[CompactSummarizer]
+    I --> J
+    J --> K[Compact Content]
+    K --> L[Save Compact Version]
+    K --> M{Compact Publishers}
+    M --> N[Discord]
+    M --> O[Twitter]
+    M --> P[Slack]
+    
+    Q[Error] --> R[Logger]
+    R --> S[File Log]
+    R --> T[Discord Alert]
 ```
+
+### 워크플로우 단계
+
+1. **Phase 1: 원본 요약 생성**
+   - URL에서 뉴스 소스 자동 감지
+   - Full content 마크다운 생성
+   - `outputs/YYYY/MM/full/` 저장
+
+2. **Phase 2: Full Content 발송**
+   - GitHub Discussions 게시 (전체 내용)
+   - Discussion URL 획득
+
+3. **Phase 3: 간결한 재요약**
+   - CompactSummarizer로 재처리
+   - GitHub URL 포함
+   - 스타일별 최적화 (discord, twitter, slack)
+   - `outputs/YYYY/MM/compact/` 저장
+
+4. **Phase 4: Compact Content 발송**
+   - Discord: 단일 메시지 (2000자 이내)
+   - Twitter: 스레드 형식 (280자)
+   - Slack: 블록 형식
 
 ## 에러 처리 전략
 

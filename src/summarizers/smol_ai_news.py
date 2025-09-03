@@ -49,12 +49,6 @@ class SmolAINewsSummarizer(BaseSummarizer):
 - x.com 링크들이 하위의 정확한 tweet 까지 잘 링크가 되어야해. 'x.com' 이라고만 URL 이 작성되면 사용자들은 정확한 출처를 보기가 힘들어. 유념해서 링크를 잘 작성해.
 """
 
-    TODAY_SUMMARY_PROMPT = """
-## 오늘의 요약
-
-위 세 섹션 중에서 가장 중요하고 흥미로운 소식 3-5개를 선별하여 간단히 요약해 주세요.
-각 항목은 한 문장으로 작성하고, 원문 링크를 포함해 주세요.
-"""
     
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         """
@@ -84,13 +78,11 @@ class SmolAINewsSummarizer(BaseSummarizer):
         Args:
             url: Smol AI News 이슈 URL
             timeframe: 기간 정보 (선택)
-            include_today_summary: '오늘의 요약' 포함 여부 (선택)
         
         Returns:
             마크다운 형식의 요약
         """
         timeframe = kwargs.get('timeframe')
-        include_today = kwargs.get('include_today_summary', False)
         
         # 사용자 프롬프트 구성
         user_text = (
@@ -99,9 +91,6 @@ class SmolAINewsSummarizer(BaseSummarizer):
             "세 섹션만 인용·요약하고, 원문 링크/앵커를 그대로 보존하여 한국어 마크다운으로 출력해 주세요. "
             + (f"기간 힌트: {timeframe}" if timeframe else "")
         )
-        
-        if include_today:
-            user_text += f"\n\n{self.TODAY_SUMMARY_PROMPT}"
         
         # API 메시지 구성
         input_messages = [
@@ -118,6 +107,8 @@ class SmolAINewsSummarizer(BaseSummarizer):
                 input=input_messages,
                 tools=[{"type": "web_search"}],
                 temperature=0.5,
+                response_format="flex",  # Flex processing for cost savings
+                reasoning_effort="high"   # High reasoning effort for better quality
             )
             
             # 응답에서 마크다운 추출

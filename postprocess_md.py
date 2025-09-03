@@ -29,7 +29,7 @@ from src.config import Config
 from src.logger import setup_logger
 
 # 로거 설정
-logger = setup_logger("postprocess", log_file="postprocess.log")
+logger = setup_logger("postprocess")
 
 # 환경 변수 로드
 load_dotenv()
@@ -69,7 +69,7 @@ class MarkdownPostProcessor:
         if not self.api_key:
             raise ValueError("OpenAI API 키가 필요합니다. .env 파일 또는 환경변수를 확인하세요.")
         
-        self.client = OpenAI(api_key=self.api_key, timeout=60.0)
+        self.client = OpenAI(api_key=self.api_key, timeout=6000.0)
         logger.info(f"PostProcessor 초기화 완료 (모델: {self.model})")
     
     def process_file(self, input_path: str, output_path: Optional[str] = None) -> str:

@@ -135,9 +135,17 @@ class SmolAINewsSummarizer(BaseSummarizer):
             if not md:
                 raise RuntimeError("모델이 유효한 마크다운을 반환하지 않았습니다.")
             
+            # 중간 결과 로깅 (후처리 전)
+            logger.info(f"=== 후처리 전 마크다운 (길이: {len(md)}자) ===")
+            logger.debug(f"원본 마크다운:\n{md[:500]}..." if len(md) > 500 else f"원본 마크다운:\n{md}")
+            
             # 후처리: 중복 출처 제거
             logger.debug("중복 출처 제거 후처리 시작...")
             cleaned_md = self._postprocess_duplicates(md.strip())
+            
+            # 최종 결과 로깅
+            logger.info(f"=== 후처리 후 마크다운 (길이: {len(cleaned_md)}자) ===")
+            logger.debug(f"정리된 마크다운:\n{cleaned_md[:500]}..." if len(cleaned_md) > 500 else f"정리된 마크다운:\n{cleaned_md}")
             
             return cleaned_md.strip()
             
@@ -186,9 +194,9 @@ class SmolAINewsSummarizer(BaseSummarizer):
         
         try:
             logger.debug("중복 출처 제거를 위한 후처리 실행 중...")
-            # GPT-4o 또는 o1-preview 사용, reasoning effort는 low로 설정
+            # GPT-5 사용, reasoning effort는 low로 설정
             resp = self.client.responses.create(
-                model="gpt-4o",  # 또는 "o1-preview" 
+                model="gpt-5",  
                 input=input_messages,
                 reasoning={"effort": "low"},  # 단순 정리 작업이므로 low
             )

@@ -18,17 +18,23 @@ news_bot/
 │   ├── summarizers/       # 요약 생성 모듈
 │   │   ├── __init__.py
 │   │   ├── base.py        # BaseSummarizer 추상 클래스
-│   │   └── smol_ai_news.py # Smol AI News 전용 Summarizer
+│   │   ├── smol_ai_news.py # Smol AI News 전용 Summarizer
+│   │   └── postprocessors/ # 후처리 모듈
+│   │       ├── __init__.py
+│   │       ├── base.py    # BasePostProcessor 추상 클래스
+│   │       └── smol_ai.py # SmolAI 전용 중복 제거
 │   └── publishers/        # 배포 채널 모듈
 │       ├── __init__.py
 │       ├── base.py        # BasePublisher 추상 클래스
 │       ├── discord.py     # Discord 웹훅 배포
 │       ├── github.py      # GitHub Discussions 배포
 │       └── kakao.py       # 카카오톡 봇 배포
+├── tools/                 # 독립 실행 도구
+│   └── postprocess_md.py  # 범용 마크다운 후처리 스크립트
 ├── logs/                  # 로그 파일 저장
 │   └── .gitkeep
 ├── main.py               # CLI 진입점
-├── requirements.txt      # 의존성 패키지
+├── pyproject.toml        # 패키지 설정 (uv 사용)
 ├── .env.example         # 환경변수 템플릿
 ├── ARCHITECTURE.md      # 이 문서
 └── README.md            # 사용 가이드
@@ -108,11 +114,30 @@ news_bot/
   - web_search 도구 활용
   - AI Twitter/Reddit/Discord Recap 섹션 추출
   - 한국어 마크다운 형식 요약
+  - SmolAIPostProcessor를 통한 중복 출처 제거
   - 재시도 로직 및 에러 처리
 - **내장 프롬프트**:
   - `SYSTEM_PROMPT`: 기본 역할 및 규칙
   - `DEVELOPER_PROMPT`: 출력 형식 지정
-  - `TODAY_SUMMARY_PROMPT`: 오늘의 요약 옵션
+
+#### summarizers/postprocessors/base.py
+- **역할**: PostProcessor 인터페이스 정의
+- **주요 클래스**:
+  ```python
+  class BasePostProcessor(ABC):
+      @abstractmethod
+      def process(self, markdown: str) -> str:
+          pass
+  ```
+- **기능**: 에러 처리, OpenAI 응답 파싱
+
+#### summarizers/postprocessors/smol_ai.py
+- **역할**: SmolAI News 전용 후처리
+- **주요 기능**:
+  - 중복된 출처 링크 제거
+  - 반복되는 괄호 출처 정리
+  - GPT-5 모델 사용 (reasoning effort: low)
+  - 원문 구조 보존
 
 #### markdown_utils.py
 - **역할**: 마크다운 문서 처리
@@ -122,7 +147,20 @@ news_bot/
   - 헤더 파싱
   - 마크다운 검증
 
-### 3. Publishers (배포 모듈)
+### 3. Tools (독립 실행 도구)
+
+#### tools/postprocess_md.py
+- **역할**: 기존 마크다운 파일 후처리
+- **주요 기능**:
+  - 파일 입출력 처리
+  - SmolAIPostProcessor 활용
+  - CLI 인터페이스 제공
+- **사용법**:
+  ```bash
+  python tools/postprocess_md.py input.md [output.md]
+  ```
+
+### 4. Publishers (배포 모듈)
 
 #### publishers/base.py
 - **역할**: Publisher 인터페이스 정의
@@ -162,7 +200,7 @@ news_bot/
   - 1000자 제한 처리
   - 커스텀 웹훅 지원
 
-### 3. Main Entry Point
+### 5. Main Entry Point
 
 #### main.py
 - **역할**: CLI 인터페이스
@@ -235,13 +273,17 @@ graph LR
 ```python
 # src/summarizers/hacker_news.py
 from .base import BaseSummarizer
+from .postprocessors import HackerNewsPostProcessor  # 필요시 전용 후처리기
 
 class HackerNewsSummarizer(BaseSummarizer):
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         super().__init__("Hacker News", api_key, model)
+        # 필요시 전용 후처리기 초기화
+        # self.postprocessor = HackerNewsPostProcessor()
     
     def summarize(self, url: str, **kwargs) -> str:
         # Hacker News 요약 로직
+        # 필요시 self.postprocessor.process(markdown) 호출
         pass
     
     def get_supported_domains(self) -> list[str]:

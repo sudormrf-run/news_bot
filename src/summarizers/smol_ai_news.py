@@ -8,6 +8,7 @@ from typing import Optional, List
 from openai import OpenAI
 
 from .base import BaseSummarizer
+from .postprocessors import SmolAIPostProcessor
 from ..config import Config
 from ..logger import logger, log_execution_time
 
@@ -49,24 +50,6 @@ class SmolAINewsSummarizer(BaseSummarizer):
 - x.com 링크들이 하위의 정확한 tweet 까지 잘 링크가 되어야해. 'x.com' 이라고만 URL 이 작성되면 사용자들은 정확한 출처를 보기가 힘들어. 유념해서 링크를 잘 작성해.
 """
     
-    # 후처리용 프롬프트
-    POSTPROCESS_SYSTEM_PROMPT = """역할: 마크다운 문서 정리 전문가
-
-목표: 입력된 마크다운 텍스트에서 중복된 출처 표기를 제거하고 가독성을 개선
-
-규칙:
-1. 각 문단/불릿에서 동일한 출처가 반복되면 한 번만 남기기
-2. 연속된 문장에서 같은 링크가 반복되면 첫 번째만 남기기
-3. 마지막 "출처:" 부분은 반드시 유지
-4. 내용은 변경하지 말고 중복 링크만 제거
-5. 원문의 구조와 의미를 100% 보존"""
-
-    POSTPROCESS_DEVELOPER_PROMPT = """작업:
-1. 동일한 URL이 한 문단/불릿 내에서 2번 이상 나타나면 첫 번째만 남기고 제거
-2. "(news.smol.ai)" 같은 괄호 출처가 각 불릿 끝마다 반복되면 제거
-3. 마지막 "출처:" 줄은 그대로 유지
-4. 링크 텍스트와 URL의 매칭 관계는 유지
-5. 결과는 정리된 마크다운만 출력"""
 
     
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
@@ -81,6 +64,8 @@ class SmolAINewsSummarizer(BaseSummarizer):
         
         if self.api_key:
             self.client = OpenAI(api_key=self.api_key, timeout=6000.0)
+            # SmolAI 전용 PostProcessor 초기화
+            self.postprocessor = SmolAIPostProcessor(api_key=self.api_key, model="gpt-5")
     
     def validate_config(self) -> bool:
         """설정 유효성 검사"""
@@ -139,9 +124,9 @@ class SmolAINewsSummarizer(BaseSummarizer):
             logger.info(f"=== 후처리 전 마크다운 (길이: {len(md)}자) ===")
             logger.debug(f"원본 마크다운:\n{md[:500]}..." if len(md) > 500 else f"원본 마크다운:\n{md}")
             
-            # 후처리: 중복 출처 제거
+            # 후처리: SmolAI 전용 PostProcessor 사용
             logger.debug("중복 출처 제거 후처리 시작...")
-            cleaned_md = self._postprocess_duplicates(md.strip())
+            cleaned_md = self.postprocessor.safe_process(md.strip())
             
             # 최종 결과 로깅
             logger.info(f"=== 후처리 후 마크다운 (길이: {len(cleaned_md)}자) ===")
@@ -175,45 +160,6 @@ class SmolAINewsSummarizer(BaseSummarizer):
             md = "\n".join(chunks).strip()
         
         return md
-    
-    def _postprocess_duplicates(self, markdown: str) -> str:
-        """중복된 출처 표기를 제거하는 후처리
-        
-        Args:
-            markdown: 원본 마크다운 텍스트
-        
-        Returns:
-            중복 제거된 마크다운 텍스트
-        """
-        # 후처리용 메시지 구성
-        input_messages = [
-            {"role": "system", "content": [{"type": "input_text", "text": self.POSTPROCESS_SYSTEM_PROMPT}]},
-            {"role": "developer", "content": [{"type": "input_text", "text": self.POSTPROCESS_DEVELOPER_PROMPT}]},
-            {"role": "user", "content": [{"type": "input_text", "text": f"다음 마크다운에서 중복된 출처 표기를 제거해주세요:\n\n{markdown}"}]},
-        ]
-        
-        try:
-            logger.debug("중복 출처 제거를 위한 후처리 실행 중...")
-            # GPT-5 사용, reasoning effort는 low로 설정
-            resp = self.client.responses.create(
-                model="gpt-5",  
-                input=input_messages,
-                reasoning={"effort": "low"},  # 단순 정리 작업이므로 low
-            )
-            
-            # 응답에서 마크다운 추출
-            cleaned_md = self._extract_markdown(resp)
-            
-            if cleaned_md:
-                logger.debug("중복 출처 제거 완료")
-                return cleaned_md
-            else:
-                logger.warning("후처리 결과가 비어있음, 원본 반환")
-                return markdown
-                
-        except Exception as e:
-            logger.warning(f"후처리 중 오류 발생: {str(e)}, 원본 반환")
-            return markdown
     
     def summarize_with_retry(
         self, 

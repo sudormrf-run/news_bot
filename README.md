@@ -7,6 +7,7 @@
 - 🤖 다양한 뉴스 소스 지원 (현재: Smol AI News, 확장 가능)
 - 🌐 URL 기반 자동 소스 감지
 - 📝 한국어 마크다운 형식으로 요약 생성
+- 🧠 중복 출처 제거 후처리 (GPT-5)
 - 📤 다중 플랫폼 자동 배포:
   - Discord 웹훅
   - GitHub Discussions
@@ -24,17 +25,16 @@ git clone https://github.com/yourusername/news_bot.git
 cd news_bot
 ```
 
-### 2. 가상환경 설정 (권장)
+### 2. 가상환경 설정 (uv 사용)
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-```
+# uv 설치 (아직 없다면)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-### 3. 의존성 설치
-
-```bash
-pip install -r requirements.txt
+# 가상환경 생성 및 패키지 설치
+uv venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+uv pip install -e .
 ```
 
 ### 4. 환경변수 설정
@@ -104,6 +104,39 @@ python main.py --url https://news.smol.ai/issues/25-09-01 \
   --send-all
 ```
 
+### 후처리 옵션 (기존 마크다운 파일)
+
+```bash
+# 기존 마크다운 파일의 중복 출처 제거
+python tools/postprocess_md.py input.md output_cleaned.md
+
+# 자동 파일명 (input_cleaned.md로 저장)
+python tools/postprocess_md.py summary.md
+```
+
+### 여러 URL 처리 (예시)
+
+```bash
+# 여러 URL을 순차적으로 처리하고 하나의 final.md로 통합
+for url in \
+  "https://news.smol.ai/issues/25-09-01" \
+  "https://news.smol.ai/issues/25-09-02" \
+  "https://news.smol.ai/issues/25-09-03"; do
+  
+  # 각 URL 요약 생성
+  python main.py --url "$url" --out "temp_$(basename $url).md"
+done
+
+# 모든 파일을 final.md로 통합
+cat temp_*.md > final.md
+
+# 후처리 (중복 제거)
+python tools/postprocess_md.py final.md final_cleaned.md
+
+# 임시 파일 삭제
+rm temp_*.md
+```
+
 ### 고급 옵션
 
 ```bash
@@ -134,15 +167,20 @@ news_bot/
 │   ├── markdown_utils.py  # 마크다운 처리
 │   ├── summarizers/       # 뉴스 소스별 요약 모듈
 │   │   ├── base.py        # BaseSummarizer 클래스
-│   │   └── smol_ai_news.py # Smol AI News Summarizer
+│   │   ├── smol_ai_news.py # Smol AI News Summarizer
+│   │   └── postprocessors/ # 후처리 모듈
+│   │       ├── base.py    # BasePostProcessor
+│   │       └── smol_ai.py # SmolAI 중복 제거
 │   └── publishers/        # 배포 모듈
 │       ├── base.py        # BasePublisher 클래스
 │       ├── discord.py     # Discord 발송
 │       ├── github.py      # GitHub 발송
 │       └── kakao.py       # 카카오톡 발송
+├── tools/                 # 독립 실행 도구
+│   └── postprocess_md.py  # 마크다운 후처리
 ├── logs/                  # 로그 파일
 ├── main.py               # CLI 진입점
-├── requirements.txt      # 의존성
+├── pyproject.toml        # 패키지 설정
 ├── .env.example         # 환경변수 예시
 ├── ARCHITECTURE.md      # 상세 아키텍처 문서
 └── README.md           # 이 파일

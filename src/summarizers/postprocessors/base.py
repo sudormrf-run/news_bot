@@ -31,22 +31,24 @@ class BasePostProcessor(ABC):
         logger.debug(f"{self.name} PostProcessor 초기화 (모델: {self.model})")
     
     @abstractmethod
-    def process(self, markdown: str) -> str:
+    def process(self, markdown: str, original_source_url: Optional[str] = None) -> str:
         """마크다운 텍스트 후처리
         
         Args:
             markdown: 원본 마크다운 텍스트
+            original_source_url: 원본 소스 URL (선택적)
         
         Returns:
             처리된 마크다운 텍스트
         """
         pass
     
-    def safe_process(self, markdown: str) -> str:
+    def safe_process(self, markdown: str, original_source_url: Optional[str] = None) -> str:
         """에러 처리가 포함된 안전한 후처리
         
         Args:
             markdown: 원본 마크다운 텍스트
+            original_source_url: 원본 소스 URL (선택적)
         
         Returns:
             처리된 마크다운 텍스트 (실패시 원본 반환)
@@ -56,7 +58,10 @@ class BasePostProcessor(ABC):
                 return markdown
             
             logger.info(f"{self.name} 후처리 시작 (원본 길이: {len(markdown)}자)")
-            processed = self.process(markdown)
+            if original_source_url:
+                logger.info(f"원본 소스 URL: {original_source_url}")
+            
+            processed = self.process(markdown, original_source_url)
             
             if processed:
                 logger.info(f"{self.name} 후처리 완료 (결과 길이: {len(processed)}자)")

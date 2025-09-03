@@ -124,9 +124,9 @@ class SmolAINewsSummarizer(BaseSummarizer):
             logger.info(f"=== 후처리 전 마크다운 (길이: {len(md)}자) ===")
             logger.debug(f"원본 마크다운:\n{md[:500]}..." if len(md) > 500 else f"원본 마크다운:\n{md}")
             
-            # 후처리: SmolAI 전용 PostProcessor 사용
+            # 후처리: SmolAI 전용 PostProcessor 사용 (원본 URL 전달)
             logger.debug("중복 출처 제거 후처리 시작...")
-            cleaned_md = self.postprocessor.safe_process(md.strip())
+            cleaned_md = self.postprocessor.safe_process(md.strip(), original_source_url=url)
             
             # 최종 결과 로깅
             logger.info(f"=== 후처리 후 마크다운 (길이: {len(cleaned_md)}자) ===")

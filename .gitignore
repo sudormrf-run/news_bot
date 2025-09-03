@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Test outputs
+test_*.md
+test_*.txt
+*_test.md
+*_test.txt

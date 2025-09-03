@@ -61,7 +61,7 @@ class SmolAINewsSummarizer(BaseSummarizer):
         self.model = model or Config.OPENAI_MODEL
         
         if self.api_key:
-            self.client = OpenAI(api_key=self.api_key)
+            self.client = OpenAI(api_key=self.api_key, timeout=6000.0)
     
     def validate_config(self) -> bool:
         """설정 유효성 검사"""
@@ -106,9 +106,8 @@ class SmolAINewsSummarizer(BaseSummarizer):
                 model=self.model,
                 input=input_messages,
                 tools=[{"type": "web_search"}],
-                temperature=0.5,
-                response_format="flex",  # Flex processing for cost savings
-                reasoning_effort="high"   # High reasoning effort for better quality
+                reasoning={"effort": "high"},
+                #service_tier="flex"
             )
             
             # 응답에서 마크다운 추출

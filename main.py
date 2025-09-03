@@ -8,6 +8,7 @@ AINews 요약 생성 및 배포 파이프라인
 import os
 import sys
 import argparse
+import textwrap
 from typing import List
 
 # src 디렉토리를 Python 경로에 추가
@@ -15,7 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from src.config import Config
 from src.logger import logger, setup_logger
-from src.summarizer import Summarizer
+from src.summarizer import SummarizerFactory, NewsSource
 from src.markdown_utils import save_markdown
 from src.publishers.discord import DiscordPublisher
 from src.publishers.github import GitHubPublisher
@@ -25,12 +26,15 @@ from src.publishers.kakao import KakaoPublisher
 def parse_arguments() -> argparse.Namespace:
     """명령줄 인자 파싱"""
     parser = argparse.ArgumentParser(
-        description="AINews 리캡 → MD 저장 → (옵션) Discord/GitHub/Kakao 발송",
+        description="뉴스 요약 → MD 저장 → (옵션) Discord/GitHub/Kakao 발송",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""
         예시:
-          # 기본 요약 생성
+          # 기본 요약 생성 (URL에서 자동 감지)
           python main.py --url https://news.smol.ai/issues/25-09-01-not-much
+          
+          # 특정 소스 지정
+          python main.py --url https://news.smol.ai/issues/25-09-01 --source smol_ai_news
           
           # 기간 정보와 함께 요약
           python main.py --url https://news.smol.ai/issues/25-09-01 --timeframe "2025-08-29 ~ 2025-09-01"
@@ -44,10 +48,16 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--url",
         required=True,
-        help="AINews 이슈 URL (예: https://news.smol.ai/issues/25-09-01)"
+        help="뉴스 URL (예: https://news.smol.ai/issues/25-09-01)"
     )
     
     # 선택 인자
+    parser.add_argument(
+        "--source",
+        choices=[source.value for source in NewsSource],
+        help="뉴스 소스 타입 (기본: URL에서 자동 감지)"
+    )
+    
     parser.add_argument(
         "--timeframe",
         default="",
@@ -118,8 +128,10 @@ def main() -> int:
         setup_logger(level=log_level)
         
         logger.info("=" * 60)
-        logger.info("AINews 요약 파이프라인 시작")
+        logger.info("뉴스 요약 파이프라인 시작")
         logger.info(f"URL: {args.url}")
+        if args.source:
+            logger.info(f"소스: {args.source}")
         logger.info("=" * 60)
         
         # 설정 검증
@@ -131,14 +143,34 @@ def main() -> int:
         
         # 1. 요약 생성
         logger.info("📝 요약 생성 중...")
-        summarizer = Summarizer()
+        
+        # Summarizer 선택 및 생성
+        try:
+            if args.source:
+                # 명시적으로 소스가 지정된 경우
+                news_source = NewsSource(args.source)
+                summarizer = SummarizerFactory.create(news_source)
+            else:
+                # URL에서 자동 감지
+                summarizer = SummarizerFactory.create_from_url(args.url)
+                logger.info(f"자동 감지된 소스: {summarizer.name}")
+        except ValueError as e:
+            logger.error(f"Summarizer 생성 실패: {str(e)}")
+            return 1
         
         try:
-            markdown_content = summarizer.generate_with_retry(
-                issue_url=args.url,
-                timeframe=args.timeframe,
-                max_retries=3
-            )
+            # summarize_with_retry 메서드가 있으면 사용, 없으면 safe_summarize 사용
+            if hasattr(summarizer, 'summarize_with_retry'):
+                markdown_content = summarizer.summarize_with_retry(
+                    args.url,
+                    max_retries=3,
+                    timeframe=args.timeframe
+                )
+            else:
+                markdown_content = summarizer.safe_summarize(
+                    args.url,
+                    timeframe=args.timeframe
+                )
         except Exception as e:
             logger.error(f"요약 생성 실패: {str(e)}")
             return 1

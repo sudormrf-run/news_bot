@@ -1,7 +1,8 @@
 # News Bot Architecture
 
 ## 개요
-AINews 요약 생성 및 다중 플랫폼 배포 시스템의 아키텍처 문서입니다.
+확장 가능한 뉴스 요약 생성 및 다중 플랫폼 배포 시스템의 아키텍처 문서입니다.
+다양한 뉴스 소스를 지원하며, 새로운 소스와 배포 채널을 쉽게 추가할 수 있는 구조로 설계되었습니다.
 
 ## 시스템 구조
 
@@ -12,12 +13,15 @@ news_bot/
 │   ├── config.py          # 환경변수 및 설정 관리
 │   ├── logger.py          # 로깅 시스템
 │   ├── notifier.py        # 에러 알림 시스템
-│   ├── prompts.py         # AI 프롬프트 관리
-│   ├── summarizer.py      # OpenAI 요약 생성
+│   ├── summarizer.py      # Summarizer Factory
 │   ├── markdown_utils.py  # 마크다운 처리 유틸리티
+│   ├── summarizers/       # 요약 생성 모듈
+│   │   ├── __init__.py
+│   │   ├── base.py        # BaseSummarizer 추상 클래스
+│   │   └── smol_ai_news.py # Smol AI News 전용 Summarizer
 │   └── publishers/        # 배포 채널 모듈
 │       ├── __init__.py
-│       ├── base.py        # Publisher 추상 클래스
+│       ├── base.py        # BasePublisher 추상 클래스
 │       ├── discord.py     # Discord 웹훅 배포
 │       ├── github.py      # GitHub Discussions 배포
 │       └── kakao.py       # 카카오톡 봇 배포
@@ -26,6 +30,7 @@ news_bot/
 ├── main.py               # CLI 진입점
 ├── requirements.txt      # 의존성 패키지
 ├── .env.example         # 환경변수 템플릿
+├── ARCHITECTURE.md      # 이 문서
 └── README.md            # 사용 가이드
 
 ```
@@ -67,23 +72,47 @@ news_bot/
   - 에러 레벨별 색상 구분
   - 발생 시간 및 환경 정보 포함
 
-#### prompts.py
-- **역할**: AI 프롬프트 중앙 관리
+#### summarizer.py
+- **역할**: Summarizer Factory 패턴 구현
 - **주요 기능**:
-  - System/Developer 프롬프트 상수 정의
-  - 프롬프트 버전 관리
-  - 다국어 지원 준비
-- **프롬프트 타입**:
+  - 뉴스 소스에 따른 적절한 Summarizer 선택
+  - URL 기반 자동 Summarizer 감지
+  - 새로운 Summarizer 등록 및 관리
+  - 하위 호환성 지원
+- **주요 클래스**:
+  - `NewsSource`: 지원하는 뉴스 소스 Enum
+  - `SummarizerFactory`: Factory 클래스
+  - `Summarizer`: 하위 호환성을 위한 래퍼
+
+### 2. Summarizers (요약 생성 모듈)
+
+#### summarizers/base.py
+- **역할**: Summarizer 인터페이스 정의
+- **주요 클래스**:
+  ```python
+  class BaseSummarizer(ABC):
+      @abstractmethod
+      def summarize(self, url: str, **kwargs) -> str:
+          pass
+      
+      @abstractmethod
+      def get_supported_domains(self) -> list[str]:
+          pass
+  ```
+- **확장성**: 새로운 뉴스 소스 추가 시 이 인터페이스 구현
+
+#### summarizers/smol_ai_news.py
+- **역할**: Smol AI News 전용 요약 생성
+- **주요 기능**:
+  - OpenAI Responses API 호출
+  - web_search 도구 활용
+  - AI Twitter/Reddit/Discord Recap 섹션 추출
+  - 한국어 마크다운 형식 요약
+  - 재시도 로직 및 에러 처리
+- **내장 프롬프트**:
   - `SYSTEM_PROMPT`: 기본 역할 및 규칙
   - `DEVELOPER_PROMPT`: 출력 형식 지정
-
-#### summarizer.py
-- **역할**: OpenAI API를 통한 요약 생성
-- **주요 기능**:
-  - Responses API 호출
-  - web_search 도구 활용
-  - 마크다운 형식 요약 생성
-  - 에러 처리 및 재시도 로직
+  - `TODAY_SUMMARY_PROMPT`: 오늘의 요약 옵션
 
 #### markdown_utils.py
 - **역할**: 마크다운 문서 처리
@@ -93,7 +122,7 @@ news_bot/
   - 헤더 파싱
   - 마크다운 검증
 
-### 2. Publishers (배포 모듈)
+### 3. Publishers (배포 모듈)
 
 #### publishers/base.py
 - **역할**: Publisher 인터페이스 정의
@@ -142,29 +171,37 @@ news_bot/
   - 파이프라인 조율
   - 에러 처리 및 로깅 초기화
 - **CLI 옵션**:
-  - `--url`: AINews 이슈 URL (필수)
+  - `--url`: 뉴스 URL (필수)
+  - `--source`: 뉴스 소스 타입 (선택, 기본: URL에서 자동 감지)
   - `--timeframe`: 기간 정보
   - `--out`: 출력 파일 경로
   - `--title`: GitHub Discussion 제목
   - `--send-discord`: Discord 발송 플래그
   - `--send-github`: GitHub 게시 플래그
   - `--send-kakao`: 카카오톡 발송 플래그
+  - `--send-all`: 모든 채널로 발송
+  - `--debug`: 디버그 모드
+  - `--dry-run`: 실제 발송 없이 시뮬레이션
 
 ## 데이터 흐름
 
 ```mermaid
 graph LR
-    A[AINews URL] --> B[Summarizer]
-    B --> C[Markdown Content]
-    C --> D[Save to File]
-    C --> E{Publishers}
-    E --> F[Discord]
-    E --> G[GitHub]
-    E --> H[Kakao]
+    A[News URL] --> B[SummarizerFactory]
+    B --> C{Source Detection}
+    C --> D[SmolAINews]
+    C --> E[Future Sources]
+    D --> F[Markdown Content]
+    E --> F
+    F --> G[Save to File]
+    F --> H{Publishers}
+    H --> I[Discord]
+    H --> J[GitHub]
+    H --> K[Kakao]
     
-    I[Error] --> J[Logger]
-    J --> K[File Log]
-    J --> L[Discord Alert]
+    L[Error] --> M[Logger]
+    M --> N[File Log]
+    M --> O[Discord Alert]
 ```
 
 ## 에러 처리 전략
@@ -185,6 +222,31 @@ graph LR
    - 발생 시간 및 모듈 정보 제공
 
 ## 확장 가이드
+
+### 새로운 Summarizer 추가하기
+
+1. `src/summarizers/` 디렉토리에 새 파일 생성
+2. `BaseSummarizer` 클래스 상속
+3. `summarize()`, `validate_config()`, `get_supported_domains()` 메서드 구현
+4. `src/summarizer.py`의 `NewsSource` Enum에 새 소스 추가
+5. `SummarizerFactory._summarizers`에 등록
+
+예시:
+```python
+# src/summarizers/hacker_news.py
+from .base import BaseSummarizer
+
+class HackerNewsSummarizer(BaseSummarizer):
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+        super().__init__("Hacker News", api_key, model)
+    
+    def summarize(self, url: str, **kwargs) -> str:
+        # Hacker News 요약 로직
+        pass
+    
+    def get_supported_domains(self) -> list[str]:
+        return ['news.ycombinator.com', 'hackernews.com']
+```
 
 ### 새로운 Publisher 추가하기
 

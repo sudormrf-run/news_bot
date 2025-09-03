@@ -1,10 +1,11 @@
 # News Bot
 
-AINews 요약 생성 및 다중 플랫폼 배포 자동화 시스템
+확장 가능한 뉴스 요약 생성 및 다중 플랫폼 배포 자동화 시스템
 
 ## 주요 기능
 
-- 🤖 OpenAI API를 사용한 AINews 이슈 자동 요약
+- 🤖 다양한 뉴스 소스 지원 (현재: Smol AI News, 확장 가능)
+- 🌐 URL 기반 자동 소스 감지
 - 📝 한국어 마크다운 형식으로 요약 생성
 - 📤 다중 플랫폼 자동 배포:
   - Discord 웹훅
@@ -12,6 +13,7 @@ AINews 요약 생성 및 다중 플랫폼 배포 자동화 시스템
   - 카카오톡 봇
 - 📊 파일 로깅 및 Discord 에러 알림
 - 🔧 모듈화된 구조로 쉬운 확장
+- 🎯 Factory 패턴으로 새로운 뉴스 소스 추가 간편
 
 ## 설치
 
@@ -58,8 +60,12 @@ GITHUB_TOKEN=your_github_token
 ### 기본 사용
 
 ```bash
-# AINews 이슈 요약 생성
+# URL에서 소스 자동 감지하여 요약 생성
 python main.py --url https://news.smol.ai/issues/25-09-01-not-much
+
+# 특정 소스 명시
+python main.py --url https://news.smol.ai/issues/25-09-01 \
+  --source smol_ai_news
 
 # 기간 정보와 함께 요약
 python main.py --url https://news.smol.ai/issues/25-09-01 \
@@ -101,6 +107,9 @@ python main.py --url https://news.smol.ai/issues/25-09-01 \
 ### 고급 옵션
 
 ```bash
+# 지원하는 뉴스 소스 확인
+python main.py --help  # --source 옵션의 choices 확인
+
 # 디버그 모드 (상세 로그)
 python main.py --url https://news.smol.ai/issues/25-09-01 --debug
 
@@ -121,11 +130,13 @@ news_bot/
 │   ├── config.py          # 환경변수 관리
 │   ├── logger.py          # 로깅 시스템
 │   ├── notifier.py        # 에러 알림
-│   ├── prompts.py         # AI 프롬프트
-│   ├── summarizer.py      # OpenAI 요약 생성
+│   ├── summarizer.py      # Summarizer Factory
 │   ├── markdown_utils.py  # 마크다운 처리
+│   ├── summarizers/       # 뉴스 소스별 요약 모듈
+│   │   ├── base.py        # BaseSummarizer 클래스
+│   │   └── smol_ai_news.py # Smol AI News Summarizer
 │   └── publishers/        # 배포 모듈
-│       ├── base.py        # Publisher 기본 클래스
+│       ├── base.py        # BasePublisher 클래스
 │       ├── discord.py     # Discord 발송
 │       ├── github.py      # GitHub 발송
 │       └── kakao.py       # 카카오톡 발송
@@ -165,6 +176,31 @@ news_bot/
 - `LOG_DIR`: 로그 파일 디렉토리
 
 ## 확장 가이드
+
+### 새로운 Summarizer (뉴스 소스) 추가
+
+1. `src/summarizers/` 디렉토리에 새 파일 생성
+2. `BaseSummarizer` 클래스 상속
+3. 필수 메서드 구현: `summarize()`, `validate_config()`, `get_supported_domains()`
+4. `src/summarizer.py`의 `NewsSource` Enum에 추가
+5. `SummarizerFactory._summarizers`에 등록
+
+예시 (`src/summarizers/hacker_news.py`):
+
+```python
+from .base import BaseSummarizer
+
+class HackerNewsSummarizer(BaseSummarizer):
+    def __init__(self, api_key=None, model=None):
+        super().__init__("Hacker News", api_key, model)
+    
+    def summarize(self, url: str, **kwargs) -> str:
+        # Hacker News 요약 로직
+        pass
+    
+    def get_supported_domains(self) -> list[str]:
+        return ['news.ycombinator.com', 'hackernews.com']
+```
 
 ### 새로운 Publisher 추가
 

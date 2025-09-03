@@ -28,9 +28,6 @@ cd news_bot
 ### 2. 가상환경 설정 (uv 사용)
 
 ```bash
-# uv 설치 (아직 없다면)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
 # 가상환경 생성 및 패키지 설치
 uv venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
@@ -112,29 +109,6 @@ python tools/postprocess_md.py input.md output_cleaned.md
 
 # 자동 파일명 (input_cleaned.md로 저장)
 python tools/postprocess_md.py summary.md
-```
-
-### 여러 URL 처리 (예시)
-
-```bash
-# 여러 URL을 순차적으로 처리하고 하나의 final.md로 통합
-for url in \
-  "https://news.smol.ai/issues/25-09-01" \
-  "https://news.smol.ai/issues/25-09-02" \
-  "https://news.smol.ai/issues/25-09-03"; do
-  
-  # 각 URL 요약 생성
-  python main.py --url "$url" --out "temp_$(basename $url).md"
-done
-
-# 모든 파일을 final.md로 통합
-cat temp_*.md > final.md
-
-# 후처리 (중복 제거)
-python tools/postprocess_md.py final.md final_cleaned.md
-
-# 임시 파일 삭제
-rm temp_*.md
 ```
 
 ### 고급 옵션

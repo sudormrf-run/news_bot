@@ -4,7 +4,7 @@ Smol AI News Summarizer
 https://news.smol.ai 전용 요약 생성기
 """
 
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from openai import OpenAI
 
 from .base import BaseSummarizer
@@ -85,6 +85,24 @@ class SmolAINewsSummarizer(BaseSummarizer):
         Returns:
             마크다운 형식의 요약
         """
+        result = self.summarize_with_metadata(url, **kwargs)
+        return result['markdown']
+    
+    @log_execution_time
+    def summarize_with_metadata(self, url: str, **kwargs) -> Dict[str, Any]:
+        """Smol AI News 요약과 메타데이터 생성
+        
+        Args:
+            url: Smol AI News 이슈 URL
+            timeframe: 기간 정보 (선택)
+        
+        Returns:
+            {
+                'markdown': 마크다운 형식의 요약,
+                'headline': 추출된 헤드라인,
+                'date': 날짜 정보
+            }
+        """
         timeframe = kwargs.get('timeframe')
         
         # 사용자 프롬프트 구성
@@ -124,14 +142,30 @@ class SmolAINewsSummarizer(BaseSummarizer):
             logger.debug(f"원본 마크다운:\n{md[:500]}..." if len(md) > 500 else f"원본 마크다운:\n{md}")
             
             # 후처리: SmolAI 전용 PostProcessor 사용 (원본 URL 전달)
-            logger.debug("중복 출처 제거 후처리 시작...")
-            cleaned_md = self.postprocessor.safe_process(md.strip(), original_source_url=url)
+            logger.debug("중복 출처 제거 및 헤드라인 추출 시작...")
+            cleaned_md, headline = self.postprocessor.process_with_headline(md.strip(), original_source_url=url)
             
             # 최종 결과 로깅
             logger.info(f"=== 후처리 후 마크다운 (길이: {len(cleaned_md)}자) ===")
+            if headline:
+                logger.info(f"=== 추출된 헤드라인: {headline} ===")
             logger.debug(f"정리된 마크다운:\n{cleaned_md[:500]}..." if len(cleaned_md) > 500 else f"정리된 마크다운:\n{cleaned_md}")
             
-            return cleaned_md.strip()
+            # URL에서 날짜 추출 시도
+            import re
+            date_match = re.search(r'(\d{2})-(\d{2})-(\d{2})', url)
+            if date_match:
+                date_str = f"25.{date_match.group(1)}.{date_match.group(2)}"
+            else:
+                # 기본값
+                from datetime import datetime
+                date_str = datetime.now().strftime("%y.%m.%d")
+            
+            return {
+                'markdown': cleaned_md.strip(),
+                'headline': headline or "",
+                'date': date_str
+            }
             
         except Exception as e:
             logger.error(f"Smol AI News 요약 생성 실패: {str(e)}", exc_info=True)

@@ -23,7 +23,9 @@ class Config:
     
     # GitHub 설정
     GITHUB_TOKEN: Optional[str] = os.getenv("GITHUB_TOKEN")
-    GH_REPO: Optional[str] = os.getenv("GH_REPO")
+    GH_REPO: Optional[str] = os.getenv("GH_REPO")  # Repository discussions (owner/repo)
+    GH_ORG: Optional[str] = os.getenv("GH_ORG")  # Organization discussions
+    GH_ORG_REPO: Optional[str] = os.getenv("GH_ORG_REPO", ".github")  # Organization의 discussion repository 이름
     GH_DISCUSSION_CATEGORY: Optional[str] = os.getenv("GH_DISCUSSION_CATEGORY")
     
     # Kakao 설정
@@ -54,7 +56,7 @@ class Config:
         """GitHub Discussions 발송 가능 여부"""
         return all([
             cls.GITHUB_TOKEN,
-            cls.GH_REPO,
+            cls.GH_REPO or cls.GH_ORG,  # Repository 또는 Organization
             cls.GH_DISCUSSION_CATEGORY
         ])
     

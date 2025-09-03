@@ -211,3 +211,18 @@ test_*.md
 test_*.txt
 *_test.md
 *_test.txt
+
+# Generated outputs (but keep directory structure)
+outputs/**/*.md
+!outputs/README.md
+outputs/**/*.json
+outputs/**/*.txt
+
+# Keep directory structure
+!outputs/.gitkeep
+!outputs/*/.gitkeep
+!outputs/*/*/.gitkeep
+
+# Temporary files
+recap.md
+temp_*.md

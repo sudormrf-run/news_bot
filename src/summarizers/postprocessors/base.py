@@ -4,8 +4,9 @@ PostProcessor 베이스 클래스
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Dict, Any
 from openai import OpenAI
+import json
 
 from ...config import Config
 from ...logger import logger
@@ -96,3 +97,40 @@ class BasePostProcessor(ABC):
             md = "\n".join(chunks).strip()
         
         return md
+    
+    def _extract_json(self, response) -> Optional[Dict[str, Any]]:
+        """OpenAI API 응답에서 JSON 추출
+        
+        Args:
+            response: OpenAI API 응답 객체
+        
+        Returns:
+            파싱된 JSON 딕셔너리 또는 None
+        """
+        try:
+            # 먼저 마크다운/텍스트 추출
+            text = self._extract_markdown(response)
+            
+            if not text:
+                return None
+            
+            # JSON 블록 찾기 (```json ... ``` 또는 직접 JSON)
+            import re
+            json_match = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                # JSON처럼 보이는 부분 추출
+                json_match = re.search(r'\{.*\}', text, re.DOTALL)
+                if json_match:
+                    json_str = json_match.group(0)
+                else:
+                    # 전체 텍스트를 JSON으로 파싱 시도
+                    json_str = text
+            
+            # JSON 파싱
+            return json.loads(json_str)
+            
+        except (json.JSONDecodeError, AttributeError) as e:
+            logger.debug(f"JSON 추출 실패: {str(e)}")
+            return None

@@ -10,6 +10,8 @@ import sys
 import argparse
 import textwrap
 from typing import List
+from datetime import datetime
+import re
 
 # src 디렉토리를 Python 경로에 추가
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
@@ -66,8 +68,8 @@ def parse_arguments() -> argparse.Namespace:
     
     parser.add_argument(
         "--out",
-        default="recap.md",
-        help="저장할 마크다운 파일 경로 (기본: recap.md)"
+        default=None,
+        help="저장할 마크다운 파일 경로 (기본: outputs/YYYY/MM/recap_YYYYMMDD_HHMMSS.md)"
     )
     
     parser.add_argument(
@@ -159,8 +161,21 @@ def main() -> int:
             return 1
         
         try:
-            # summarize_with_retry 메서드가 있으면 사용, 없으면 safe_summarize 사용
-            if hasattr(summarizer, 'summarize_with_retry'):
+            # 메타데이터와 함께 요약 생성 시도
+            metadata = {}
+            if hasattr(summarizer, 'summarize_with_metadata'):
+                result = summarizer.summarize_with_metadata(
+                    args.url,
+                    timeframe=args.timeframe
+                )
+                markdown_content = result.get('markdown', '')
+                metadata = {
+                    'headline': result.get('headline', ''),
+                    'date': result.get('date', '')
+                }
+                if metadata.get('headline'):
+                    logger.info(f"헤드라인: {metadata['headline']}")
+            elif hasattr(summarizer, 'summarize_with_retry'):
                 markdown_content = summarizer.summarize_with_retry(
                     args.url,
                     max_retries=3,
@@ -176,6 +191,34 @@ def main() -> int:
             return 1
         
         # 2. 파일 저장
+        # 저장 경로 자동 생성 (사용자가 지정하지 않은 경우)
+        if not args.out:
+            # 날짜 기반 디렉토리 구조 생성
+            from datetime import datetime
+            now = datetime.now()
+            year_month = now.strftime("%Y/%m")
+            
+            # URL에서 날짜 정보 추출 시도 (SmolAI News의 경우)
+            date_match = re.search(r'(\d{2})-(\d{2})-(\d{2})', args.url)
+            if date_match and 'smol' in args.url.lower():
+                # SmolAI News 형식
+                filename = f"smol_ai_news_20{date_match.group(1)}{date_match.group(2)}{date_match.group(3)}.md"
+            else:
+                # 일반 형식
+                filename = f"recap_{now.strftime('%Y%m%d_%H%M%S')}.md"
+            
+            # 출력 디렉토리 생성
+            output_dir = os.path.join("outputs", year_month)
+            os.makedirs(output_dir, exist_ok=True)
+            
+            args.out = os.path.join(output_dir, filename)
+            logger.info(f"출력 경로 자동 생성: {args.out}")
+        else:
+            # 사용자가 지정한 경로의 디렉토리 생성
+            output_dir = os.path.dirname(args.out)
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+        
         logger.info(f"💾 파일 저장: {args.out}")
         save_markdown(args.out, markdown_content)
         logger.info(f"✅ 저장 완료: {os.path.abspath(args.out)}")
@@ -207,20 +250,29 @@ def main() -> int:
         
         # GitHub 발송
         if args.send_github:
+            # 타이틀 자동 생성 (사용자 지정 타이틀이 없는 경우)
             if not args.title:
-                logger.error("GitHub 발송에는 --title이 필요합니다")
-                results.append("GitHub: ❌ 제목 없음")
-            else:
-                logger.info("📤 GitHub Discussions 게시 중...")
-                if args.dry_run:
-                    logger.info("[DRY-RUN] GitHub 게시 시뮬레이션")
-                    results.append("GitHub: [DRY-RUN] 성공")
+                if metadata.get('headline') and metadata.get('date'):
+                    # 헤드라인을 사용하여 타이틀 생성
+                    args.title = f"[AI News, {metadata['date']}] {metadata['headline']}"
+                    logger.info(f"타이틀 자동 생성: {args.title}")
                 else:
-                    github = GitHubPublisher()
-                    if github.safe_publish(markdown_content, title=args.title):
-                        results.append("GitHub: ✅ 성공")
-                    else:
-                        results.append("GitHub: ❌ 실패")
+                    # 기본 타이틀
+                    from datetime import datetime
+                    date_str = datetime.now().strftime("%y.%m.%d")
+                    args.title = f"[AI News, {date_str}] AI 뉴스 요약"
+                    logger.warning(f"헤드라인 없음, 기본 타이틀 사용: {args.title}")
+            
+            logger.info("📤 GitHub Discussions 게시 중...")
+            if args.dry_run:
+                logger.info("[DRY-RUN] GitHub 게시 시뮬레이션")
+                results.append("GitHub: [DRY-RUN] 성공")
+            else:
+                github = GitHubPublisher()
+                if github.safe_publish(markdown_content, title=args.title):
+                    results.append("GitHub: ✅ 성공")
+                else:
+                    results.append("GitHub: ❌ 실패")
         
         # Kakao 발송
         if args.send_kakao:

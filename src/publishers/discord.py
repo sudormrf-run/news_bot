@@ -3,6 +3,7 @@
 Discord 웹훅 Publisher
 """
 
+import re
 import requests
 from typing import Optional, List
 
@@ -45,6 +46,9 @@ class DiscordPublisher(BasePublisher):
         
         tag = kwargs.get('tag', '')
         username = kwargs.get('username', 'News Bot')
+        
+        # 링크 임베드 비활성화 처리
+        content = self._disable_link_embeds(content)
         
         # 긴 메시지를 청크로 분할
         chunks = self._split_message(content, tag)
@@ -141,6 +145,38 @@ class DiscordPublisher(BasePublisher):
             chunks.append('\n'.join(current_chunk))
         
         return chunks or [content[:self.MAX_MESSAGE_LENGTH]]
+    
+    def _disable_link_embeds(self, content: str) -> str:
+        """마크다운 링크를 Discord 임베드가 비활성화되도록 변환
+        
+        GitHub Discussions 링크는 제외하고 모든 [text](url) 형식을 [text](<url>)로 변환
+        
+        Args:
+            content: 원본 콘텐츠
+        
+        Returns:
+            변환된 콘텐츠
+        """
+        def replace_link(match):
+            text = match.group(1)
+            url = match.group(2)
+            
+            # GitHub Discussions 링크는 그대로 유지
+            if 'github.com' in url and 'discussions' in url:
+                return f'[{text}]({url})'
+            
+            # 이미 < > 로 감싸진 경우 그대로 유지
+            if url.startswith('<') and url.endswith('>'):
+                return f'[{text}]({url})'
+            
+            # 다른 모든 링크는 < > 로 감싸기
+            return f'[{text}](<{url}>)'
+        
+        # 마크다운 링크 패턴 매칭: [text](url)
+        pattern = r'\[([^\]]+)\]\(([^)]+)\)'
+        content = re.sub(pattern, replace_link, content)
+        
+        return content
     
     def send_embed(self, title: str, description: str, color: int = 0x00FF00, **fields) -> bool:
         """Discord Embed 메시지 발송

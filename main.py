@@ -163,7 +163,18 @@ def main() -> int:
         try:
             # 메타데이터와 함께 요약 생성 시도
             metadata = {}
-            if hasattr(summarizer, 'summarize_with_metadata'):
+            if hasattr(summarizer, 'summarize_with_result'):
+                # Weekly Robotics 등 SummarizerResult를 반환하는 경우
+                result = summarizer.summarize_with_result(
+                    args.url,
+                    timeframe=args.timeframe
+                )
+                markdown_content = result.summary  # summary 속성 사용
+                metadata = result.metadata or {}
+                if metadata.get('headline'):
+                    logger.info(f"헤드라인: {metadata['headline']}")
+            elif hasattr(summarizer, 'summarize_with_metadata'):
+                # SmolAI 등 dict를 반환하는 경우
                 result = summarizer.summarize_with_metadata(
                     args.url,
                     timeframe=args.timeframe
@@ -203,6 +214,13 @@ def main() -> int:
             if date_match and 'smol' in args.url.lower():
                 # SmolAI News 형식
                 filename = f"smol_ai_news_20{date_match.group(1)}{date_match.group(2)}{date_match.group(3)}.md"
+            elif 'weeklyrobotics' in args.url.lower():
+                # Weekly Robotics 형식 (issue 번호 추출)
+                issue_match = re.search(r'weekly-robotics-(\d+)', args.url)
+                if issue_match:
+                    filename = f"weekly_robotics_{issue_match.group(1)}_{now.strftime('%Y%m%d')}.md"
+                else:
+                    filename = f"weekly_robotics_{now.strftime('%Y%m%d_%H%M%S')}.md"
             else:
                 # 일반 형식
                 filename = f"recap_{now.strftime('%Y%m%d_%H%M%S')}.md"
@@ -231,36 +249,28 @@ def main() -> int:
             logger.info(f"전체 발송 모드: {Config.get_enabled_publishers()}")
         
         results = []
+        github_url = None
         
-        # Discord 발송
-        if args.send_discord:
-            logger.info("📤 Discord 발송 중...")
-            if args.dry_run:
-                logger.info("[DRY-RUN] Discord 발송 시뮬레이션")
-                results.append("Discord: [DRY-RUN] 성공")
-            else:
-                discord = DiscordPublisher()
-                if discord.safe_publish(
-                    markdown_content,
-                    tag=f"**{args.title}**" if args.title else ""
-                ):
-                    results.append("Discord: ✅ 성공")
-                else:
-                    results.append("Discord: ❌ 실패")
-        
-        # GitHub 발송
+        # GitHub 발송 (Discord보다 먼저 실행해서 URL 얻기)
         if args.send_github:
             # 타이틀 자동 생성 (사용자 지정 타이틀이 없는 경우)
             if not args.title:
                 if metadata.get('headline') and metadata.get('date'):
-                    # 헤드라인을 사용하여 타이틀 생성
-                    args.title = f"[AI News, {metadata['date']}] {metadata['headline']}"
+                    # 소스에 따라 다른 타이틀 형식
+                    source = metadata.get('source', '')
+                    if 'Weekly Robotics' in source or 'weeklyrobotics' in args.url.lower():
+                        args.title = f"[Robotics News, {metadata['date']}] {metadata['headline']}"
+                    else:
+                        args.title = f"[AI News, {metadata['date']}] {metadata['headline']}"
                     logger.info(f"타이틀 자동 생성: {args.title}")
                 else:
                     # 기본 타이틀
                     from datetime import datetime
                     date_str = datetime.now().strftime("%y.%m.%d")
-                    args.title = f"[AI News, {date_str}] AI 뉴스 요약"
+                    if 'weeklyrobotics' in args.url.lower():
+                        args.title = f"[Robotics News, {date_str}] Weekly Robotics 요약"
+                    else:
+                        args.title = f"[AI News, {date_str}] AI 뉴스 요약"
                     logger.warning(f"헤드라인 없음, 기본 타이틀 사용: {args.title}")
             
             logger.info("📤 GitHub Discussions 게시 중...")
@@ -271,8 +281,34 @@ def main() -> int:
                 github = GitHubPublisher()
                 if github.safe_publish(markdown_content, title=args.title):
                     results.append("GitHub: ✅ 성공")
+                    # GitHub URL 저장
+                    github_url = getattr(github, 'last_discussion_url', None)
+                    if github_url:
+                        logger.info(f"GitHub Discussion URL: {github_url}")
                 else:
                     results.append("GitHub: ❌ 실패")
+        
+        # Discord 발송 (GitHub 이후에 실행해서 URL 포함 가능)
+        if args.send_discord:
+            logger.info("📤 Discord 발송 중...")
+            
+            # GitHub URL이 있으면 마크다운에 추가
+            discord_content = markdown_content
+            if github_url:
+                discord_content += f"\n\n---\n📖 **상세 뉴스레터**: {github_url}"
+            
+            if args.dry_run:
+                logger.info("[DRY-RUN] Discord 발송 시뮬레이션")
+                results.append("Discord: [DRY-RUN] 성공")
+            else:
+                discord = DiscordPublisher()
+                if discord.safe_publish(
+                    discord_content,
+                    tag=f"**{args.title}**" if args.title else ""
+                ):
+                    results.append("Discord: ✅ 성공")
+                else:
+                    results.append("Discord: ❌ 실패")
         
         # Kakao 발송
         if args.send_kakao:

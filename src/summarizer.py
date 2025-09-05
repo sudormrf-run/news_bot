@@ -9,12 +9,14 @@ from enum import Enum
 
 from .summarizers.base import BaseSummarizer
 from .summarizers.smol_ai_news import SmolAINewsSummarizer
+from .summarizers.weekly_robotics import WeeklyRoboticsSummarizer
 from .logger import logger
 
 
 class NewsSource(Enum):
     """지원하는 뉴스 소스"""
     SMOL_AI_NEWS = "smol_ai_news"
+    WEEKLY_ROBOTICS = "weekly_robotics"
     # 향후 추가 예정
     # HACKER_NEWS = "hacker_news"
     # TECH_CRUNCH = "tech_crunch"
@@ -27,6 +29,7 @@ class SummarizerFactory:
     # 등록된 Summarizer 매핑
     _summarizers: Dict[NewsSource, Type[BaseSummarizer]] = {
         NewsSource.SMOL_AI_NEWS: SmolAINewsSummarizer,
+        NewsSource.WEEKLY_ROBOTICS: WeeklyRoboticsSummarizer,
     }
     
     @classmethod

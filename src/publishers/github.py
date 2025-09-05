@@ -68,7 +68,8 @@ class GitHubPublisher(BasePublisher):
             url = self._create_discussion(title, content)
             if url:
                 logger.info(f"GitHub Discussion 생성 완료: {url}")
-                # 결과에 URL 저장
+                # 결과에 URL 저장 (인스턴스 변수로도 저장)
+                self.last_discussion_url = url
                 kwargs['discussion_url'] = url
                 return True
             return False

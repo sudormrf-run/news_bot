@@ -292,10 +292,37 @@ def main() -> int:
         if args.send_discord:
             logger.info("📤 Discord 발송 중...")
             
-            # GitHub URL이 있으면 마크다운에 추가
+            # SmolAI News는 Compact 버전으로, 다른 소스는 원본 사용
             discord_content = markdown_content
-            if github_url:
-                discord_content += f"\n\n---\n📖 **상세 뉴스레터**: {github_url}"
+            
+            # SmolAI News인 경우 Compact 버전 생성
+            if 'smol' in args.url.lower() and github_url:
+                logger.info("SmolAI News - Compact 버전 생성 중...")
+                try:
+                    from src.summarizers.compact import CompactSummarizer
+                    compact = CompactSummarizer()
+                    compact_content = compact.summarize(
+                        content=markdown_content,
+                        github_url=github_url,
+                        style="discord"
+                    )
+                    if compact_content and "요약 생성 실패" not in compact_content:
+                        discord_content = compact_content
+                        logger.info("Compact 버전 생성 완료")
+                    else:
+                        logger.warning("Compact 버전 생성 실패, 원본 사용")
+                        # GitHub URL 추가
+                        if github_url:
+                            discord_content += f"\n\n---\n📖 **상세 뉴스레터**: {github_url}"
+                except Exception as e:
+                    logger.warning(f"Compact 버전 생성 중 오류: {e}, 원본 사용")
+                    # GitHub URL 추가
+                    if github_url:
+                        discord_content += f"\n\n---\n📖 **상세 뉴스레터**: {github_url}"
+            else:
+                # 다른 소스는 원본에 GitHub URL만 추가
+                if github_url:
+                    discord_content += f"\n\n---\n📖 **상세 뉴스레터**: {github_url}"
             
             if args.dry_run:
                 logger.info("[DRY-RUN] Discord 발송 시뮬레이션")

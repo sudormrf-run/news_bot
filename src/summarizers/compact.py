@@ -89,7 +89,7 @@ class CompactSummarizer(BaseSummarizer):
 아래 형식을 정확히 따라주세요. 날짜는 실제 뉴스 날짜를 사용하세요.
 
 출력 형식:
-# 🤖 AI News [YY.MM.DD]
+# AI News [YY.MM.DD]
 
 ## 🔥 핵심 뉴스
 • **[제목]**: [1-2문장 설명]. [자세히 보기](링크)
@@ -101,7 +101,7 @@ class CompactSummarizer(BaseSummarizer):
 • [트렌드 3]
 
 ---
-📖 전체 요약: [GitHub Discussion 링크](실제 URL)
+📖 상세 뉴스레터: [GitHub Discussion 링크](실제 URL)
 
 규칙:
 1. 각 뉴스는 반드시 "**제목**: 설명. [자세히 보기](링크)" 형식
@@ -120,7 +120,7 @@ class CompactSummarizer(BaseSummarizer):
 - Cohere 번역 특화 모델 출시
 - ByteDance USO 오픈소스 스타일 편집 도구 공개"""
         
-        example_output = """# 🤖 AI News 25.09.04
+        example_output = """# AI News 25.09.04
 
 ## 🔥 핵심 뉴스
 • **OpenAI, gpt-realtime 출시**: OpenAI가 gpt-realtime과 Realtime API를 공식 출시하며 가격을 20% 인하했습니다. 음성 제어, 다국어 전환, 신규 보이스 추가 등 다양한 기능이 개선되었습니다. [자세히 보기](https://openai.com/index/introducing-gpt-realtime/)
@@ -134,7 +134,7 @@ class CompactSummarizer(BaseSummarizer):
 • AI 모델의 기능적 개선과 가격 인하 추세
 
 ---
-📖 전체 요약: [GitHub Discussion 링크](https://github.com/orgs/sudormrf-run/discussions/4)"""
+📖 상세 뉴스레터: [GitHub Discussion 링크](https://github.com/orgs/sudormrf-run/discussions/4)"""
         
         user_prompt = f"""다음 AI 뉴스 요약을 위 형식에 맞춰 Discord용으로 간결하게 재요약해주세요.
 날짜: {date_str}

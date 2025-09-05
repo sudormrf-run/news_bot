@@ -28,8 +28,8 @@ def main():
     logger.info("=" * 60)
     
     # 파일 경로와 GitHub URL
-    input_file = "/Users/jonhpark/workspace/news_bot/outputs/2025/09/smol_ai_news_20250902.md"
-    github_url = "https://github.com/orgs/sudormrf-run/discussions/6"
+    input_file = "/Users/jonhpark/workspace/news_bot/outputs/2025/09/smol_ai_news_20250903.md"
+    github_url = "https://github.com/orgs/sudormrf-run/discussions/7"
     
     try:
         # 1. 마크다운 파일 읽기

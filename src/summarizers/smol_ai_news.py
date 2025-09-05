@@ -155,7 +155,7 @@ class SmolAINewsSummarizer(BaseSummarizer):
             import re
             date_match = re.search(r'(\d{2})-(\d{2})-(\d{2})', url)
             if date_match:
-                date_str = f"25.{date_match.group(1)}.{date_match.group(2)}"
+                date_str = f"{date_match.group(1)}.{date_match.group(2)}.{date_match.group(3)}"
             else:
                 # 기본값
                 from datetime import datetime

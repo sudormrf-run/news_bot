@@ -101,7 +101,10 @@ class CompactSummarizer(BaseSummarizer):
 
 ## 📊 주요 트렌드
 • [트렌드 1]
-• [트렌드 2]"""
+• [트렌드 2]
+
+---
+📖 상세 뉴스레터: [GitHub Discussion URL]"""
         else:
             system_prompt = """당신은 AI 뉴스를 Discord용으로 간결하게 요약하는 전문가입니다.
 
@@ -155,9 +158,15 @@ class CompactSummarizer(BaseSummarizer):
 ---
 📖 상세 뉴스레터: [GitHub Discussion 링크](https://github.com/orgs/sudormrf-run/discussions/4)"""
         
-        user_prompt = f"""다음 AI 뉴스 요약을 위 형식에 맞춰 Discord용으로 간결하게 재요약해주세요.
+        news_type = "로보틱스" if is_robotics else "AI"
+        user_prompt = f"""다음 {news_type} 뉴스 요약을 위 형식에 맞춰 Discord용으로 간결하게 재요약해주세요.
+
 날짜: {date_str}
-GitHub Discussion URL: {github_url if github_url else '[GitHub Discussion 링크]'}
+GitHub Discussion URL: {github_url if github_url else 'https://github.com/sudormrf-run/community/discussions'}
+
+중요: 반드시 마지막에 다음 형식으로 GitHub 링크를 추가하세요:
+---
+📖 상세 뉴스레터: {github_url if github_url else 'GitHub Discussion 링크'}
 
 원본 요약:
 {content}"""
@@ -187,6 +196,14 @@ GitHub Discussion URL: {github_url if github_url else '[GitHub Discussion 링크
                 # 응답에서 텍스트 추출
                 compact_summary = self._extract_text_from_response(response)
                 logger.info(f"OpenAI Responses API 응답 수신 완료")
+                
+                # GitHub URL이 없으면 추가
+                if github_url and github_url not in compact_summary:
+                    if not compact_summary.strip().endswith(github_url):
+                        compact_summary = compact_summary.rstrip()
+                        if "---" not in compact_summary[-100:]:  # 마지막 100자 내에 구분선이 없으면
+                            compact_summary += "\n\n---"
+                        compact_summary += f"\n📖 상세 뉴스레터: {github_url}"
             
             result = {
                 'markdown': compact_summary,

@@ -346,6 +346,14 @@ def main() -> int:
                 if github_url:
                     discord_content += f"\n\n---\n📖 **상세 뉴스레터**: {github_url}"
             
+            # Discord 콘텐츠를 별도 파일로 저장 (Compact 버전이 아니어도)
+            if discord_content != markdown_content:
+                # Compact 버전이거나 수정된 경우에만 저장
+                compact_filename = args.out.replace('.md', '_discord.md')
+                logger.info(f"💾 Discord 버전 저장: {compact_filename}")
+                save_markdown(compact_filename, discord_content)
+                logger.info(f"✅ Discord 버전 저장 완료")
+            
             if args.dry_run:
                 logger.info("[DRY-RUN] Discord 발송 시뮬레이션")
                 results.append("Discord: [DRY-RUN] 성공")

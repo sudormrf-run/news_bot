@@ -353,6 +353,19 @@ def main() -> int:
                 logger.info(f"💾 Discord 버전 저장: {compact_filename}")
                 save_markdown(compact_filename, discord_content)
                 logger.info(f"✅ Discord 버전 저장 완료")
+                
+                # 카카오톡용 텍스트 버전 생성 및 저장
+                try:
+                    from src.formatters.kakao import KakaoFormatter, save_kakao_text
+                    
+                    kakao_formatter = KakaoFormatter()
+                    kakao_content = kakao_formatter.format(discord_content)
+                    
+                    kakao_filename = args.out.replace('.md', '_kakao.txt')
+                    save_kakao_text(kakao_filename, kakao_content)
+                    logger.info(f"✅ 카카오톡 버전 저장 완료: {kakao_filename}")
+                except Exception as e:
+                    logger.warning(f"카카오톡 버전 생성 중 오류: {e}")
             
             if args.dry_run:
                 logger.info("[DRY-RUN] Discord 발송 시뮬레이션")

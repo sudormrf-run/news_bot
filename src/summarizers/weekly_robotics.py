@@ -31,8 +31,9 @@ class WeeklyRoboticsSummarizer(BaseSummarizer):
 """
 
     DEVELOPER_PROMPT = """출력 포맷 규칙:
-- 최상단에 헤드라인 필수: **헤드라인: [가장 주목할 만한 뉴스 제목 - 짧고 임팩트 있게]**
-- 제목: # Weekly Robotics #[이슈번호] - [날짜]
+- 최상단에 헤드라인 필수 (내부 추출용): **헤드라인: [가장 주목할 만한 뉴스 제목 - 짧고 임팩트 있게]**
+- 썸네일 URL 추출 (내부용): **썸네일: [이미지 URL]** (있는 경우에만)
+- 제목 없음 (Weekly Robotics #XXX 형식의 제목 금지!)
 - 3개 섹션만: ## 🤖 이번 주 핵심 동향, ## 📰 주요 뉴스, ## 🛠 기술 리소스
 - 핵심 동향: 전체 뉴스를 관통하는 트렌드 1-2문장으로 요약 (링크 없음)
 - 주요 뉴스: 
@@ -44,6 +45,9 @@ class WeeklyRoboticsSummarizer(BaseSummarizer):
   • **[리소스명]**: 설명. [링크](url)
   • 3-5개 선별
   • 각 항목당 링크 하나만
+- 마지막에 출처 추가: 
+  ---
+  📖 출처: [Weekly Robotics #이슈번호](원문URL)
 - 링크 규칙 (중요!):
   • 각 뉴스/리소스당 링크는 단 1개만
   • "[자세히 보기]" 또는 "[링크]" 형태로 통일
@@ -52,7 +56,7 @@ class WeeklyRoboticsSummarizer(BaseSummarizer):
 - 전체 분량: 2000자 이내
 - 이벤트/행사 정보는 제외
 - 출력은 순수 마크다운만 (프론트매터, HTML 불가)
-- 헤드라인은 가장 흥미로운 뉴스 선택"""
+- 헤드라인과 썸네일은 내부 추출용이므로 본문 시작은 ## 🤖 부터"""
 
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         """Initialize Weekly Robotics Summarizer
@@ -151,24 +155,32 @@ class WeeklyRoboticsSummarizer(BaseSummarizer):
             headline = self._extract_headline(markdown)
             if headline:
                 logger.info(f"추출된 헤드라인: {headline}")
-                # 마크다운에서 헤드라인 라인 제거
-                lines = markdown.split('\n')
-                filtered_lines = []
-                for line in lines:
-                    if not line.startswith('**헤드라인:'):
-                        filtered_lines.append(line)
-                markdown = '\n'.join(filtered_lines).strip()
             
-            # 이슈 정보 추가 (필요시)
-            if "Weekly Robotics #Unknown" in markdown:
+            # 썸네일 추출
+            thumbnail = self._extract_thumbnail(markdown)
+            if thumbnail:
+                logger.info(f"추출된 썸네일: {thumbnail}")
+            
+            # 마크다운에서 헤드라인과 썸네일 라인 제거
+            lines = markdown.split('\n')
+            filtered_lines = []
+            for line in lines:
+                if not line.startswith('**헤드라인:') and not line.startswith('**썸네일:'):
+                    filtered_lines.append(line)
+            markdown = '\n'.join(filtered_lines).strip()
+            
+            # 썸네일이 있으면 최상단에 추가
+            if thumbnail:
+                markdown = f"![Weekly Robotics]({thumbnail})\n\n{markdown}"
+            
+            # 출처 URL이 없으면 추가
+            if f"출처: [Weekly Robotics" not in markdown:
                 issue_number, date_str = self.extract_issue_info(markdown, url)
-                markdown = markdown.replace(
-                    "Weekly Robotics #Unknown",
-                    f"Weekly Robotics #{issue_number}"
-                )
+                markdown = f"{markdown}\n\n---\n📖 출처: [Weekly Robotics #{issue_number}]({url})"
             
-            # 헤드라인과 함께 반환 (메타데이터로 활용)
+            # 헤드라인과 썸네일 저장 (메타데이터로 활용)
             self._last_headline = headline
+            self._last_thumbnail = thumbnail
             
             logger.info("Weekly Robotics 요약 완료")
             return markdown
@@ -227,6 +239,23 @@ class WeeklyRoboticsSummarizer(BaseSummarizer):
                 return headline
         return None
     
+    def _extract_thumbnail(self, markdown: str) -> Optional[str]:
+        """마크다운에서 썸네일 URL 추출
+        
+        Args:
+            markdown: 요약된 마크다운 텍스트
+            
+        Returns:
+            추출된 썸네일 URL 또는 None
+        """
+        lines = markdown.split('\n')
+        for line in lines:
+            if line.startswith('**썸네일:'):
+                # **썸네일: URL** 형식에서 추출
+                thumbnail = line.replace('**썸네일:', '').replace('**', '').strip()
+                return thumbnail
+        return None
+    
     def summarize_with_result(self, url: str, **kwargs) -> SummarizerResult:
         """Weekly Robotics 요약 생성 (메타데이터 포함)
         
@@ -244,8 +273,9 @@ class WeeklyRoboticsSummarizer(BaseSummarizer):
             # 메타데이터 추출
             issue_number, date_str = self.extract_issue_info(markdown, url)
             
-            # 헤드라인 사용 (저장된 헤드라인 또는 기본값)
+            # 헤드라인과 썸네일 사용 (저장된 값 또는 기본값)
             headline = getattr(self, '_last_headline', None) or f"Weekly Robotics #{issue_number}"
+            thumbnail = getattr(self, '_last_thumbnail', None)
             
             return SummarizerResult(
                 summarizer_name=self.name,
@@ -258,7 +288,8 @@ class WeeklyRoboticsSummarizer(BaseSummarizer):
                     'date': date_str,
                     'issue_number': issue_number,
                     'source': 'Weekly Robotics',
-                    'url': url
+                    'url': url,
+                    'thumbnail': thumbnail
                 }
             )
             

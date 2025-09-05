@@ -83,8 +83,27 @@ class CompactSummarizer(BaseSummarizer):
         
         logger.info(f"간결한 요약 생성 시작 (날짜: {date_str}, 스타일: {style}, 최대 {max_length}자)")
         
+        # 콘텐츠 소스 판별 (Weekly Robotics인지 AI News인지)
+        is_robotics = 'Weekly Robotics' in content or '로봇' in content or '로보틱스' in content
+        
         # Discord 스타일 프롬프트
-        system_prompt = """당신은 AI 뉴스를 Discord용으로 간결하게 요약하는 전문가입니다.
+        if is_robotics:
+            system_prompt = """당신은 로보틱스 뉴스를 Discord용으로 간결하게 요약하는 전문가입니다.
+
+아래 형식을 정확히 따라주세요. 날짜는 실제 뉴스 날짜를 사용하세요.
+
+출력 형식:
+# Robotics News [YY.MM.DD]
+
+## 🤖 핵심 뉴스
+• **[제목]**: [1-2문장 설명]. [자세히 보기](링크)
+(3-5개 항목)
+
+## 📊 주요 트렌드
+• [트렌드 1]
+• [트렌드 2]"""
+        else:
+            system_prompt = """당신은 AI 뉴스를 Discord용으로 간결하게 요약하는 전문가입니다.
 
 아래 형식을 정확히 따라주세요. 날짜는 실제 뉴스 날짜를 사용하세요.
 

@@ -295,14 +295,27 @@ def main() -> int:
             # SmolAI News는 Compact 버전으로, 다른 소스는 원본 사용
             discord_content = markdown_content
             
-            # SmolAI News인 경우 Compact 버전 생성
-            if 'smol' in args.url.lower() and github_url:
-                logger.info("SmolAI News - Compact 버전 생성 중...")
+            # SmolAI News 또는 Weekly Robotics인 경우 Compact 버전 생성
+            if ('smol' in args.url.lower() or 'weeklyrobotics' in args.url.lower()) and github_url:
+                source_type = "SmolAI News" if 'smol' in args.url.lower() else "Weekly Robotics"
+                logger.info(f"{source_type} - Compact 버전 생성 중...")
                 try:
                     from src.summarizers.compact import CompactSummarizer
                     compact = CompactSummarizer()
+                    
+                    # Weekly Robotics의 경우 썸네일 제거
+                    content_for_compact = markdown_content
+                    if 'weeklyrobotics' in args.url.lower():
+                        # 썸네일 이미지 라인 제거
+                        lines = markdown_content.split('\n')
+                        filtered_lines = []
+                        for line in lines:
+                            if not line.startswith('![Weekly Robotics]('):
+                                filtered_lines.append(line)
+                        content_for_compact = '\n'.join(filtered_lines).strip()
+                    
                     compact_content = compact.summarize(
-                        content=markdown_content,
+                        content=content_for_compact,
                         github_url=github_url,
                         style="discord"
                     )
@@ -311,12 +324,21 @@ def main() -> int:
                         logger.info("Compact 버전 생성 완료")
                     else:
                         logger.warning("Compact 버전 생성 실패, 원본 사용")
-                        # GitHub URL 추가
+                        # 썸네일 제거하고 GitHub URL 추가
+                        if 'weeklyrobotics' in args.url.lower():
+                            discord_content = content_for_compact
                         if github_url:
                             discord_content += f"\n\n---\n📖 **상세 뉴스레터**: {github_url}"
                 except Exception as e:
                     logger.warning(f"Compact 버전 생성 중 오류: {e}, 원본 사용")
-                    # GitHub URL 추가
+                    # 썸네일 제거하고 GitHub URL 추가
+                    if 'weeklyrobotics' in args.url.lower():
+                        lines = markdown_content.split('\n')
+                        filtered_lines = []
+                        for line in lines:
+                            if not line.startswith('![Weekly Robotics]('):
+                                filtered_lines.append(line)
+                        discord_content = '\n'.join(filtered_lines).strip()
                     if github_url:
                         discord_content += f"\n\n---\n📖 **상세 뉴스레터**: {github_url}"
             else:

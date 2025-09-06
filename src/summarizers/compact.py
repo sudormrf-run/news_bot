@@ -84,7 +84,8 @@ class CompactSummarizer(BaseSummarizer):
         logger.info(f"간결한 요약 생성 시작 (날짜: {date_str}, 스타일: {style}, 최대 {max_length}자)")
         
         # 콘텐츠 소스 판별 (Weekly Robotics인지 AI News인지)
-        is_robotics = 'Weekly Robotics' in content or '로봇' in content or '로보틱스' in content
+        # Weekly Robotics는 명시적으로 표시되어 있을 때만
+        is_robotics = 'Weekly Robotics' in content or '출처: [Weekly Robotics' in content
         
         # Discord 스타일 프롬프트
         if is_robotics:

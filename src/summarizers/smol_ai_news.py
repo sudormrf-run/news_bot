@@ -9,6 +9,7 @@ from openai import OpenAI
 
 from .base import BaseSummarizer
 from .postprocessors import SmolAIPostProcessor
+from ..utils.link_preserver import LinkPreserver
 from ..config import Config
 from ..logger import logger, log_execution_time
 
@@ -47,6 +48,7 @@ class SmolAINewsSummarizer(BaseSummarizer):
 - 입력으로 제공된 원문 뉴스레터 링크는 한번만 명시하면 되니까 반복해서 입력을 넣지말고, 마지막에 출처로 한번만 명시해줘
 - 연속적으로 중복된 링크는 사용자의 피로함을 불러일으키니, 링크는 하나만 잘 달아야 해, 같은 URL을 연속적으로 중복해서 작성하지 않도록 해. 
 - x.com 링크들이 하위의 정확한 tweet 까지 잘 링크가 되어야해. 'x.com' 이라고만 URL 이 작성되면 사용자들은 정확한 출처를 보기가 힘들어. 유념해서 링크를 잘 작성해.
+- [LINK_0001], [LINK_0002] 같은 placeholder를 발견하면 절대 변경하지 말고 그대로 유지할 것. 이것들은 나중에 원본 링크로 복원됨.
 """
     
 
@@ -110,6 +112,7 @@ class SmolAINewsSummarizer(BaseSummarizer):
             f"요약 대상 URL: {url}\n"
             "요청: 상기 페이지에서 'AI Twitter Recap', 'AI Reddit Recap', 'AI Discord Recap' "
             "세 섹션만 인용·요약하고, 원문 링크/앵커를 그대로 보존하여 한국어 마크다운으로 출력해 주세요. "
+            "중요: 모든 링크 placeholder ([LINK_0001] 형태)는 절대 변경하지 말고 그대로 유지하세요. "
             + (f"기간 힌트: {timeframe}" if timeframe else "")
         )
         
@@ -121,6 +124,9 @@ class SmolAINewsSummarizer(BaseSummarizer):
         ]
         
         try:
+            # LinkPreserver 초기화
+            link_preserver = LinkPreserver()
+            
             # OpenAI Responses API 호출
             logger.debug("Smol AI News 요약을 위한 OpenAI API 호출 중...")
             resp = self.client.responses.create(
@@ -137,6 +143,10 @@ class SmolAINewsSummarizer(BaseSummarizer):
             if not md:
                 raise RuntimeError("모델이 유효한 마크다운을 반환하지 않았습니다.")
             
+            # 원본 마크다운에서 링크 추출 및 보존
+            original_links = link_preserver.extract_links(md)
+            logger.info(f"원본에서 {len(original_links)}개 링크 발견")
+            
             # 중간 결과 로깅 (후처리 전)
             logger.info(f"=== 후처리 전 마크다운 (길이: {len(md)}자) ===")
             logger.debug(f"원본 마크다운:\n{md[:500]}..." if len(md) > 500 else f"원본 마크다운:\n{md}")
@@ -144,6 +154,16 @@ class SmolAINewsSummarizer(BaseSummarizer):
             # 후처리: SmolAI 전용 PostProcessor 사용 (원본 URL 전달)
             logger.debug("중복 출처 제거 및 헤드라인 추출 시작...")
             cleaned_md, headline = self.postprocessor.process_with_headline(md.strip(), original_source_url=url)
+            
+            # 링크 검증 및 복구
+            processed_links = link_preserver.extract_links(cleaned_md)
+            logger.info(f"후처리 후 {len(processed_links)}개 링크 존재")
+            
+            # 원본 링크와 비교하여 누락된 링크 확인
+            validation_result = link_preserver.validate_links(md, cleaned_md)
+            if validation_result['missing']:
+                logger.warning(f"링크 {len(validation_result['missing'])}개 누락됨, 복구 시도...")
+                # TODO: 누락된 링크 복구 로직 구현 필요
             
             # 최종 결과 로깅
             logger.info(f"=== 후처리 후 마크다운 (길이: {len(cleaned_md)}자) ===")
